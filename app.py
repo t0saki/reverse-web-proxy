@@ -11,7 +11,7 @@ app = Flask(__name__)
 # --- Configuration ---
 NOTICE_BANNER_HTML = """
 <div style="background-color: #ffc107; color: #333; padding: 12px; text-align: center; font-family: sans-serif; font-size: 16px; border-bottom: 2px solid #e0a800; z-index: 999999; position: sticky; top: 0;">
-    <b>Notice:</b> This page is for academic research purposes only. This connection is relayed by a proxy server, which can view or modify traffic. Avoid submitting passwords, financial details, or any sensitive personal data.
+    <b>Notice:</b> This page is intended for educational and research purposes only. This connection is relayed by a proxy server, which can view or modify traffic. Avoid submitting passwords, financial details, or any sensitive personal data.
 </div>
 """
 
