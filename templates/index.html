@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-g">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Reverse Proxy</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+    <div class="flex flex-col items-center justify-center min-h-screen px-4">
+        <div class="w-full max-w-2xl mx-auto">
+            <div class="bg-white dark:bg-gray-800 rounded-2xl shadow-lg p-8 md:p-12">
+                <div class="text-center">
+                    <svg class="mx-auto h-12 w-12 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A11.953 11.953 0 0112 16.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 003 12c0-.778.099-1.533.284-2.253" />
+                    </svg>
+                    <h1 class="text-3xl font-bold mt-4">Web Reverse Proxy</h1>
+                    <p class="text-gray-600 dark:text-gray-400 mt-2">Enter a URL to access it via the secure server proxy.</p>
+                </div>
+
+                <!-- The form submits the URL to the /proxy endpoint using the GET method -->
+                <form action="/proxy" method="GET" class="mt-8 space-y-6">
+                    <div>
+                        <label for="url-input" class="sr-only">URL</label>
+                        <div class="relative">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                               <svg class="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                                  <path stroke-linecap="round" stroke-linejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" />
+                                </svg>
+                            </div>
+                            <input type="text" name="url" id="url-input" class="w-full pl-10 pr-4 py-3 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition" placeholder="example.com" required>
+                        </div>
+                    </div>
+
+                    <div>
+                        <button type="submit" class="w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-100 dark:focus:ring-offset-gray-900 focus:ring-blue-500 transition-transform transform hover:scale-105">
+                            Access Securely
+                        </button>
+                    </div>
+                </form>
+            </div>
+            <p class="text-center text-xs text-gray-500 mt-6">&copy; 2024 Reverse Proxy Service. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+</html>
