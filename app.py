@@ -1,20 +1,10 @@
-# app.py
-# A simple web reverse proxy service using Flask.
-#
-# To run this application:
-# 1. Install dependencies:
-#    pip install Flask requests beautifulsoup4
-# 2. Save this file as `app.py`.
-# 3. Create a directory named `templates` in the same folder.
-# 4. Save the HTML file as `index.html` inside the `templates` directory.
-# 5. Run the server from your terminal:
-#    flask run
-# 6. Open your web browser and navigate to http://127.0.0.1:5000
+# A more robust web reverse proxy service using Flask.
 
 from flask import Flask, render_template, request, Response, redirect, url_for
 import requests
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
+import re # NEW: Import regex for advanced rewriting
 
 app = Flask(__name__)
 
@@ -24,6 +14,21 @@ NOTICE_BANNER_HTML = """
     <b>Notice:</b> This page is for academic research purposes only. This connection is relayed by a proxy server, which can view or modify traffic. Avoid submitting passwords, financial details, or any sensitive personal data.
 </div>
 """
+
+# --- Helper Function for Rewriting URLs in Text/CSS ---
+def rewrite_css_urls(content, base_url):
+    """
+    NEW: A helper function to rewrite url() paths in CSS or style blocks.
+    Uses regex to find all occurrences of url(...) and rewrites the inner path.
+    """
+    def replacer(match):
+        original_url = match.group(1).strip("'\"")
+        absolute_url = urljoin(base_url, original_url)
+        proxied_url = url_for('proxy_path', target_url=absolute_url)
+        return f"url('{proxied_url}')"
+
+    # This regex finds url(...) patterns, capturing the content inside the parentheses.
+    return re.sub(r'url\((.*?)\)', replacer, content)
 
 @app.route('/')
 def index():
@@ -40,21 +45,19 @@ def proxy_redirect():
     if not target_url:
         return "Error: No URL provided in the 'url' parameter.", 400
 
-    # Ensure the URL has a scheme (e.g., http, https)
+    # MODIFIED: Better scheme handling. Default to https for a modern web.
     if not target_url.startswith(('http://', 'https://')):
-        target_url = 'http://' + target_url
-    
-    # Redirect to the path-based URL structure
+        target_url = 'https://' + target_url
+
     return redirect(url_for('proxy_path', target_url=target_url))
 
-
-@app.route('/proxy/<path:target_url>')
+# MODIFIED: Now accepts both GET and POST requests
+@app.route('/proxy/<path:target_url>', methods=['GET', 'POST'])
 def proxy_path(target_url):
     """
     The main proxy logic. Fetches a URL passed as part of the path.
+    Now handles GET, POST, cookies, and more robust content rewriting.
     """
-    # Re-append the original query string from the user's request
-    # This is crucial for searches, e.g., ?q=hello
     query_params = request.query_string.decode('utf-8')
     if query_params:
         full_target_url = f"{target_url}?{query_params}"
@@ -63,50 +66,112 @@ def proxy_path(target_url):
 
     try:
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-            # IMPORTANT: Forward the Host header of the target, not our proxy's host
+            'User-Agent': request.headers.get('User-Agent', 'Mozilla/5.0'), # Forward user's agent
+            'Referer': request.headers.get('Referer', ''),
+            'Accept-Language': request.headers.get('Accept-Language', ''),
             'Host': urlparse(target_url).netloc
         }
-        
-        resp = requests.get(full_target_url, headers=headers, stream=True, allow_redirects=False)
+
+        # NEW: Handle POST requests by forwarding form data
+        if request.method == 'POST':
+            # Forward form data and files
+            resp = requests.post(
+                full_target_url,
+                headers=headers,
+                data=request.form,
+                files=request.files,
+                cookies=request.cookies, # NEW: Forward cookies from the client
+                stream=True,
+                allow_redirects=False
+            )
+        else: # GET request
+            resp = requests.get(
+                full_target_url,
+                headers=headers,
+                cookies=request.cookies, # NEW: Forward cookies from the client
+                stream=True,
+                allow_redirects=False
+            )
 
         content_type = resp.headers.get('Content-Type', '').lower()
-        
-        # Handle redirects manually to rewrite the Location header
+
         if 300 <= resp.status_code < 400 and 'Location' in resp.headers:
             new_location = urljoin(full_target_url, resp.headers['Location'])
-            # Redirect the user's browser to the new proxied location
             return redirect(url_for('proxy_path', target_url=new_location))
 
+        # --- Content Rewriting ---
         if 'text/html' in content_type:
-            html_content = resp.content # Use .content to handle encoding better
-            soup = BeautifulSoup(html_content, 'html.parser', from_encoding=resp.encoding)
+            # Use .content to avoid decoding issues, BeautifulSoup will handle it.
+            soup = BeautifulSoup(resp.content, 'html.parser', from_encoding=resp.encoding)
 
-            # URL Rewriting for the new path-based structure
+            # MODIFIED: Expanded list of tags and attributes to rewrite
             tags_to_rewrite = {
-                'a': 'href', 'link': 'href', 'script': 'src', 'img': 'src', 'form': 'action'
+                'a': 'href', 'link': 'href', 'script': 'src', 'img': ['src', 'srcset'],
+                'form': 'action', 'iframe': 'src', 'meta': 'content'
             }
-            for tag_name, attr in tags_to_rewrite.items():
-                for tag in soup.find_all(tag_name, **{attr: True}):
-                    original_url = tag[attr]
-                    absolute_url = urljoin(full_target_url, original_url)
-                    # Rewrite the attribute to point back to our new proxy structure
-                    tag[attr] = url_for('proxy_path', target_url=absolute_url)
+            for tag_name, attrs in tags_to_rewrite.items():
+                if not isinstance(attrs, list): attrs = [attrs] # Ensure attrs is a list
+                for attr in attrs:
+                    for tag in soup.find_all(tag_name, **{attr: True}):
+                        # Special handling for meta refresh URLs
+                        if tag_name == 'meta' and 'url=' in tag.get(attr, ''):
+                            content_val = tag[attr]
+                            original_url = content_val.split('url=')[-1]
+                            absolute_url = urljoin(full_target_url, original_url)
+                            tag[attr] = f"{content_val.split('url=')[0]}url={url_for('proxy_path', target_url=absolute_url)}"
+                        else:
+                            original_url = tag[attr]
+                            # Special handling for srcset which has multiple URLs
+                            if attr == 'srcset':
+                                rewritten_srcset = []
+                                for part in original_url.split(','):
+                                    part = part.strip()
+                                    url_part, *desc_part = part.split(' ', 1)
+                                    absolute_url = urljoin(full_target_url, url_part)
+                                    proxied_url = url_for('proxy_path', target_url=absolute_url)
+                                    rewritten_srcset.append(f"{proxied_url} {' '.join(desc_part)}")
+                                tag[attr] = ', '.join(rewritten_srcset)
+                            else:
+                                absolute_url = urljoin(full_target_url, original_url)
+                                tag[attr] = url_for('proxy_path', target_url=absolute_url)
+
+            # NEW: Rewrite URLs inside <style> tags
+            for style_tag in soup.find_all('style'):
+                style_tag.string = rewrite_css_urls(style_tag.get_text(), full_target_url)
+
+            # NEW: Rewrite URLs inside inline style attributes
+            for tag in soup.find_all(style=True):
+                tag['style'] = rewrite_css_urls(tag['style'], full_target_url)
 
             # Banner Injection
             body = soup.find('body')
             if body:
                 banner_soup = BeautifulSoup(NOTICE_BANNER_HTML, 'html.parser')
                 body.insert(0, banner_soup)
-            
-            return str(soup)
-        else:
-            # For non-HTML content, stream it directly.
+
+            # NEW: Create a Flask response to set cookies
+            final_response = Response(str(soup))
+            # Forward cookies from the target server to the client
+            for name, value in resp.cookies.items():
+                final_response.set_cookie(name, value)
+            return final_response
+
+        # NEW: Handle CSS content rewriting
+        elif 'text/css' in content_type:
+            css_content = resp.text
+            rewritten_css = rewrite_css_urls(css_content, full_target_url)
+            return Response(rewritten_css, content_type=content_type, status=resp.status_code)
+
+        else: # For non-HTML/CSS content, stream it directly.
             def generate():
-                for chunk in resp.iter_content(chunk_size=1024):
+                for chunk in resp.iter_content(chunk_size=8192):
                     yield chunk
             
-            return Response(generate(), content_type=content_type, status=resp.status_code)
+            final_response = Response(generate(), content_type=content_type, status=resp.status_code)
+            # Forward cookies for non-HTML content too (e.g., API calls setting a cookie)
+            for name, value in resp.cookies.items():
+                final_response.set_cookie(name, value)
+            return final_response
 
     except requests.exceptions.RequestException as e:
         return f"Error: Could not fetch the URL. {e}", 500
