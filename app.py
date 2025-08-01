@@ -58,6 +58,21 @@ def proxy_path(target_url):
     The main proxy logic. Fetches a URL passed as part of the path.
     Now handles GET, POST, cookies, and more robust content rewriting.
     """
+    return _proxy_handler(target_url, show_banner=True)
+
+# NEW: Hidden path without banner
+@app.route('/direct/<path:target_url>', methods=['GET', 'POST'])
+def direct_proxy_path(target_url):
+    """
+    Hidden proxy path that returns the original website without the notice banner.
+    Access websites directly without any modifications.
+    """
+    return _proxy_handler(target_url, show_banner=False)
+
+def _proxy_handler(target_url, show_banner=True):
+    """
+    The actual proxy logic. Extracted to a separate function to avoid code duplication.
+    """
     query_params = request.query_string.decode('utf-8')
     if query_params:
         full_target_url = f"{target_url}?{query_params}"
@@ -143,11 +158,12 @@ def proxy_path(target_url):
             for tag in soup.find_all(style=True):
                 tag['style'] = rewrite_css_urls(tag['style'], full_target_url)
 
-            # Banner Injection
-            body = soup.find('body')
-            if body:
-                banner_soup = BeautifulSoup(NOTICE_BANNER_HTML, 'html.parser')
-                body.insert(0, banner_soup)
+            # Banner Injection (only if show_banner is True)
+            if show_banner:
+                body = soup.find('body')
+                if body:
+                    banner_soup = BeautifulSoup(NOTICE_BANNER_HTML, 'html.parser')
+                    body.insert(0, banner_soup)
 
             # NEW: Create a Flask response to set cookies
             final_response = Response(str(soup))
